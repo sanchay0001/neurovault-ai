@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>NeuroVault AI</title>
+<style>
+body{
+margin:0;
+font-family:'Segoe UI';
+background:linear-gradient(135deg,#0f172a,#1e293b);
+color:white;
+display:flex;
+height:100vh;
+}
+
+.sidebar{
+width:260px;
+background:rgba(30,41,59,0.9);
+backdrop-filter:blur(12px);
+padding:20px;
+display:flex;
+flex-direction:column;
+}
+
+.logo{
+font-size:20px;
+font-weight:600;
+margin-bottom:20px;
+}
+
+.new-chat{
+background:#3b82f6;
+border:none;
+padding:10px;
+border-radius:8px;
+color:white;
+cursor:pointer;
+margin-bottom:20px;
+}
+
+.conversation{
+background:#334155;
+padding:10px;
+border-radius:8px;
+margin-bottom:10px;
+cursor:pointer;
+display:flex;
+justify-content:space-between;
+}
+
+.conversation:hover{
+background:#475569;
+}
+
+.delete{
+color:#ef4444;
+cursor:pointer;
+}
+
+.chat-area{
+flex:1;
+display:flex;
+flex-direction:column;
+padding:30px;
+}
+
+.messages{
+flex:1;
+overflow-y:auto;
+}
+
+.message{
+padding:12px 16px;
+margin:10px 0;
+border-radius:16px;
+max-width:65%;
+}
+
+.user{
+background:#2563eb;
+align-self:flex-end;
+}
+
+.assistant{
+background:#374151;
+align-self:flex-start;
+}
+
+.input-area{
+display:flex;
+gap:10px;
+}
+
+input{
+flex:1;
+padding:14px;
+border-radius:12px;
+border:none;
+outline:none;
+}
+
+button.send{
+background:#22c55e;
+border:none;
+padding:14px 20px;
+border-radius:12px;
+color:white;
+cursor:pointer;
+}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+<div class="logo">NeuroVault AI</div>
+<button class="new-chat" onclick="newChat()">+ New Chat</button>
+<div id="conversationList"></div>
+<a href="/logout" style="margin-top:auto;color:#94a3b8;">Logout</a>
+</div>
+
+<div class="chat-area">
+<div class="messages" id="messages"></div>
+<div class="input-area">
+<input id="messageInput" placeholder="Ask about finance, habits, health...">
+<button class="send" onclick="sendMessage()">Send</button>
+</div>
+</div>
+
+<script>
+let currentConversation=null;
+
+function newChat(){
+currentConversation=crypto.randomUUID();
+document.getElementById("messages").innerHTML="";
+}
+
+async function loadConversations(){
+const res=await fetch("/conversations");
+const data=await res.json();
+const list=document.getElementById("conversationList");
+list.innerHTML="";
+
+data.conversations.forEach(chat=>{
+const div=document.createElement("div");
+div.className="conversation";
+div.innerHTML=`<span>${chat.title}</span><span class="delete" onclick="deleteChat('${chat.id}')">✖</span>`;
+div.onclick=()=>currentConversation=chat.id;
+list.appendChild(div);
+});
+}
+
+async function deleteChat(id){
+await fetch(`/delete_conversation/${id}`,{method:"DELETE"});
+loadConversations();
+document.getElementById("messages").innerHTML="";
+}
+
+async function sendMessage(){
+const message=document.getElementById("messageInput").value;
+if(!message)return;
+
+if(!currentConversation){
+currentConversation=crypto.randomUUID();
+}
+
+const formData=new FormData();
+formData.append("message",message);
+formData.append("conversation_id",currentConversation);
+
+const res=await fetch("/chat",{method:"POST",body:formData});
+const data=await res.json();
+
+addMessage(message,"user");
+addMessage(data.response,"assistant");
+
+document.getElementById("messageInput").value="";
+loadConversations();
+}
+
+document.getElementById("messageInput").addEventListener("keydown",function(e){
+if(e.key==="Enter"){sendMessage();}
+});
+
+function addMessage(text,role){
+const div=document.createElement("div");
+div.className="message "+role;
+div.innerText=text;
+document.getElementById("messages").appendChild(div);
+}
+
+loadConversations();
+</script>
+
+</body>
+</html>

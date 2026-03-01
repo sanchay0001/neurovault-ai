@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>AI Life Assistant</title>
+<style>
+body {
+  margin: 0;
+  font-family: 'Segoe UI', sans-serif;
+  display: flex;
+  height: 100vh;
+  background: #0f172a;
+  color: white;
+}
+
+#sidebar {
+  width: 260px;
+  background: #1e293b;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+#sidebar h2 {
+  margin-bottom: 20px;
+}
+
+.session-btn {
+  background: #334155;
+  border: none;
+  padding: 10px;
+  margin-bottom: 8px;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.session-btn:hover {
+  background: #475569;
+}
+
+.delete-btn {
+  background: crimson;
+  border: none;
+  padding: 4px 6px;
+  margin-left: 5px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#chat-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+#chat {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.message {
+  padding: 12px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  max-width: 60%;
+}
+
+.user {
+  background: #2563eb;
+  align-self: flex-end;
+}
+
+.assistant {
+  background: #334155;
+  align-self: flex-start;
+}
+
+#input-area {
+  display: flex;
+  padding: 15px;
+  background: #1e293b;
+}
+
+#messageInput {
+  flex: 1;
+  padding: 12px;
+  border-radius: 8px;
+  border: none;
+}
+
+#sendBtn {
+  padding: 12px 20px;
+  margin-left: 10px;
+  background: #2563eb;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h2>AI Assistant</h2>
+  <button onclick="register()">Register</button>
+  <button onclick="login()">Login</button>
+  <button onclick="createSession()">+ New Chat</button>
+  <div id="sessions"></div>
+</div>
+
+<div id="chat-container">
+  <div id="chat"></div>
+  <div id="input-area">
+    <input id="messageInput" placeholder="Type a message..." />
+    <button id="sendBtn" onclick="sendMessage()">Send</button>
+  </div>
+</div>
+
+<script>
+let userId = null;
+let currentSession = null;
+
+document.getElementById("messageInput").addEventListener("keypress", function(e) {
+  if (e.key === "Enter") sendMessage();
+});
+
+async function register() {
+  const username = prompt("Username:");
+  const password = prompt("Password:");
+  await fetch("/register", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({username, password})
+  });
+  alert("Registered. Now login.");
+}
+
+async function login() {
+  const username = prompt("Username:");
+  const password = prompt("Password:");
+  const res = await fetch("/login", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({username, password})
+  });
+  const data = await res.json();
+  if (data.user_id) {
+    userId = data.user_id;
+    alert("Login successful");
+    loadSessions();
+  } else {
+    alert("Invalid credentials");
+  }
+}
+
+async function createSession() {
+  if (!userId) return alert("Login first");
+
+  const res = await fetch("/create_session", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({user_id: userId, title: "New Chat"})
+  });
+
+  const data = await res.json();
+  currentSession = data.session_id;
+  document.getElementById("chat").innerHTML = "";
+  loadSessions();
+}
+
+async function loadSessions() {
+  const res = await fetch(`/sessions/${userId}`);
+  const sessions = await res.json();
+  const container = document.getElementById("sessions");
+  container.innerHTML = "";
+
+  sessions.forEach(s => {
+    const btn = document.createElement("button");
+    btn.className = "session-btn";
+    btn.innerText = s.title;
+    btn.onclick = () => switchSession(s.id);
+
+    const del = document.createElement("button");
+    del.className = "delete-btn";
+    del.innerText = "X";
+    del.onclick = () => deleteSession(s.id);
+
+    container.appendChild(btn);
+    container.appendChild(del);
+  });
+}
+
+async function switchSession(id) {
+  currentSession = id;
+  const res = await fetch(`/messages/${id}`);
+  const messages = await res.json();
+  const chat = document.getElementById("chat");
+  chat.innerHTML = "";
+
+  messages.forEach(m => addMessage(m.role, m.message));
+}
+
+async function deleteSession(id) {
+  await fetch(`/delete_session/${id}`, {method: "DELETE"});
+  document.getElementById("chat").innerHTML = "";
+  loadSessions();
+}
+
+async function sendMessage() {
+  if (!currentSession) return alert("Create/select a chat first");
+
+  const input = document.getElementById("messageInput");
+  const msg = input.value;
+  if (!msg) return;
+
+  addMessage("user", msg);
+  input.value = "";
+
+  const res = await fetch("/chat", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      user_id: userId,
+      session_id: currentSession,
+      message: msg
+    })
+  });
+
+  const data = await res.json();
+  addMessage("assistant", data.reply);
+}
+
+function addMessage(role, text) {
+  const div = document.createElement("div");
+  div.className = "message " + role;
+  div.innerText = text;
+  document.getElementById("chat").appendChild(div);
+}
+</script>
+
+</body>
+</html>
