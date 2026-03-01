@@ -1,5 +1,8 @@
 backend/.env
+backend/*.db
+backend/*.json
 venv/
 __pycache__/
 *.pyc
-assistant.db
+*.db
+*.json
