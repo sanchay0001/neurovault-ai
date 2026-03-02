@@ -3,7 +3,6 @@ import uuid
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Depends, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
@@ -20,7 +19,7 @@ from groq import Groq
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Load .env ONLY locally (Render provides env variables itself)
+# Load .env ONLY locally
 if os.getenv("RENDER") is None:
     load_dotenv(os.path.join(BASE_DIR, ".env"))
 
@@ -31,11 +30,8 @@ if os.getenv("RENDER") is None:
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 SESSION_SECRET = os.getenv("SESSION_SECRET")
 
-if not GROQ_API_KEY:
-    print("⚠ GROQ_API_KEY not found")
-
 if not SESSION_SECRET:
-    print("⚠ SESSION_SECRET not found")
+    raise RuntimeError("SESSION_SECRET not set")
 
 # --------------------------------------------------
 # APP INIT
@@ -45,11 +41,10 @@ app = FastAPI()
 
 app.add_middleware(
     SessionMiddleware,
-    secret_key=SESSION_SECRET if SESSION_SECRET else "fallback-secret"
+    secret_key=SESSION_SECRET
 )
 
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
-app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
 # --------------------------------------------------
 # PASSWORD HASHING
@@ -68,7 +63,7 @@ client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 MODEL = "llama-3.1-8b-instant"
 
 # --------------------------------------------------
-# DATABASE STARTUP (SAFE)
+# DATABASE STARTUP
 # --------------------------------------------------
 
 @app.on_event("startup")
@@ -98,9 +93,11 @@ def get_db():
 def landing(request: Request):
     return templates.TemplateResponse("landing.html", {"request": request})
 
+
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
+
 
 @app.post("/register")
 def register(
@@ -126,6 +123,7 @@ def register(
     request.session["user_id"] = user.id
     return RedirectResponse("/chat_page", status_code=302)
 
+
 @app.post("/login")
 def login(
     request: Request,
@@ -141,11 +139,13 @@ def login(
     request.session["user_id"] = user.id
     return RedirectResponse("/chat_page", status_code=302)
 
+
 @app.get("/chat_page", response_class=HTMLResponse)
 def chat_page(request: Request):
     if not request.session.get("user_id"):
         return RedirectResponse("/login")
     return templates.TemplateResponse("chat.html", {"request": request})
+
 
 @app.post("/chat")
 def chat(
@@ -188,6 +188,7 @@ def chat(
     db.commit()
 
     return JSONResponse({"response": reply})
+
 
 @app.get("/logout")
 def logout(request: Request):
