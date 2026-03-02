@@ -68,6 +68,8 @@ padding:30px;
 .messages{
 flex:1;
 overflow-y:auto;
+display:flex;
+flex-direction:column;
 }
 
 .message{
@@ -75,6 +77,7 @@ padding:12px 16px;
 margin:10px 0;
 border-radius:16px;
 max-width:65%;
+word-wrap:break-word;
 }
 
 .user{
@@ -130,41 +133,57 @@ cursor:pointer;
 <script>
 let currentConversation = null;
 
+/* =========================
+   NEW CHAT
+========================= */
 function newChat(){
     currentConversation = crypto.randomUUID();
     document.getElementById("messages").innerHTML = "";
 }
 
+/* =========================
+   LOAD CONVERSATIONS
+========================= */
 async function loadConversations(){
     const res = await fetch("/conversations");
     const data = await res.json();
+
     const list = document.getElementById("conversationList");
     list.innerHTML = "";
 
     data.conversations.forEach(chat => {
+
         const div = document.createElement("div");
         div.className = "conversation";
 
         const title = document.createElement("span");
-        title.innerText = chat.title;
+        title.innerText = chat.title || "New Chat";
 
         const del = document.createElement("span");
         del.className = "delete";
         del.innerText = "✖";
-        del.onclick = (e) => {
+
+        /* DELETE (prevent parent click) */
+        del.onclick = async (e) => {
             e.stopPropagation();
-            deleteChat(chat.id);
+            await deleteChat(chat.id);
         };
 
         div.appendChild(title);
         div.appendChild(del);
 
-        div.onclick = () => loadMessages(chat.id);
+        /* LOAD MESSAGES WHEN CLICKING CHAT */
+        div.onclick = () => {
+            loadMessages(chat.id);
+        };
 
         list.appendChild(div);
     });
 }
 
+/* =========================
+   LOAD MESSAGES
+========================= */
 async function loadMessages(conversationId){
     const res = await fetch(`/messages/${conversationId}`);
     const data = await res.json();
@@ -173,24 +192,35 @@ async function loadMessages(conversationId){
     messagesDiv.innerHTML = "";
 
     data.messages.forEach(msg => {
-        addMessage(msg.content, msg.role);
+        addMessage(msg.message, msg.role);
     });
 
     currentConversation = conversationId;
+
+    scrollToBottom();
 }
 
+/* =========================
+   DELETE CHAT
+========================= */
 async function deleteChat(id){
     await fetch(`/delete_conversation/${id}`, {method:"DELETE"});
+
     if(currentConversation === id){
         document.getElementById("messages").innerHTML = "";
         currentConversation = null;
     }
+
     loadConversations();
 }
 
+/* =========================
+   SEND MESSAGE
+========================= */
 async function sendMessage(){
-    const messageInput = document.getElementById("messageInput");
-    const message = messageInput.value.trim();
+    const input = document.getElementById("messageInput");
+    const message = input.value.trim();
+
     if(!message) return;
 
     if(!currentConversation){
@@ -198,34 +228,57 @@ async function sendMessage(){
     }
 
     addMessage(message, "user");
-    messageInput.value = "";
+    input.value = "";
 
     const formData = new FormData();
     formData.append("message", message);
     formData.append("conversation_id", currentConversation);
 
-    const res = await fetch("/chat", {method:"POST", body:formData});
+    const res = await fetch("/chat", {
+        method:"POST",
+        body:formData
+    });
+
     const data = await res.json();
 
     addMessage(data.response, "assistant");
 
+    scrollToBottom();
     loadConversations();
 }
 
+/* =========================
+   ADD MESSAGE
+========================= */
 function addMessage(text, role){
     const div = document.createElement("div");
     div.className = "message " + role;
     div.innerText = text;
+
     document.getElementById("messages").appendChild(div);
 }
 
-document.getElementById("messageInput").addEventListener("keydown", function(e){
+/* =========================
+   SCROLL
+========================= */
+function scrollToBottom(){
+    const messagesDiv = document.getElementById("messages");
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+/* =========================
+   ENTER KEY
+========================= */
+document.getElementById("messageInput")
+.addEventListener("keydown", function(e){
     if(e.key === "Enter"){
         sendMessage();
     }
 });
 
+/* INITIAL LOAD */
 loadConversations();
+
 </script>
 
 </body>
