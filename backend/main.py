@@ -218,3 +218,37 @@ def get_conversations(request: Request, db: Session = Depends(get_db)):
         result.append({"id": conv[0], "title": title})
 
     return {"conversations": result}
+
+@app.get("/messages/{conversation_id}")
+def get_messages(conversation_id: str, request: Request, db: Session = Depends(get_db)):
+
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401)
+
+    messages = db.query(Chat).filter(
+        Chat.user_id == user_id,
+        Chat.conversation_id == conversation_id
+    ).all()
+
+    return {
+        "messages": [
+            {"role": msg.role, "message": msg.message}
+            for msg in messages
+        ]
+    }
+@app.delete("/delete_conversation/{conversation_id}")
+def delete_conversation(conversation_id: str, request: Request, db: Session = Depends(get_db)):
+
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401)
+
+    db.query(Chat).filter(
+        Chat.user_id == user_id,
+        Chat.conversation_id == conversation_id
+    ).delete()
+
+    db.commit()
+
+    return {"message": "Deleted"}
