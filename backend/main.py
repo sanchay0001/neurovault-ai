@@ -194,3 +194,27 @@ def chat(
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/", status_code=302)
+@app.get("/conversations")
+def get_conversations(request: Request, db: Session = Depends(get_db)):
+
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401)
+
+    conversations = db.query(Chat.conversation_id).filter(
+        Chat.user_id == user_id
+    ).distinct().all()
+
+    result = []
+
+    for conv in conversations:
+        first_msg = db.query(Chat).filter(
+            Chat.user_id == user_id,
+            Chat.conversation_id == conv[0],
+            Chat.role == "user"
+        ).first()
+
+        title = first_msg.message[:30] if first_msg else "New Chat"
+        result.append({"id": conv[0], "title": title})
+
+    return {"conversations": result}
