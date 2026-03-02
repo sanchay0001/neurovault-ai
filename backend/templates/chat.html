@@ -45,6 +45,7 @@ margin-bottom:10px;
 cursor:pointer;
 display:flex;
 justify-content:space-between;
+align-items:center;
 }
 
 .conversation:hover{
@@ -54,6 +55,7 @@ background:#475569;
 .delete{
 color:#ef4444;
 cursor:pointer;
+margin-left:10px;
 }
 
 .chat-area{
@@ -126,66 +128,102 @@ cursor:pointer;
 </div>
 
 <script>
-let currentConversation=null;
+let currentConversation = null;
 
 function newChat(){
-currentConversation=crypto.randomUUID();
-document.getElementById("messages").innerHTML="";
+    currentConversation = crypto.randomUUID();
+    document.getElementById("messages").innerHTML = "";
 }
 
 async function loadConversations(){
-const res=await fetch("/conversations");
-const data=await res.json();
-const list=document.getElementById("conversationList");
-list.innerHTML="";
+    const res = await fetch("/conversations");
+    const data = await res.json();
+    const list = document.getElementById("conversationList");
+    list.innerHTML = "";
 
-data.conversations.forEach(chat=>{
-const div=document.createElement("div");
-div.className="conversation";
-div.innerHTML=`<span>${chat.title}</span><span class="delete" onclick="deleteChat('${chat.id}')">✖</span>`;
-div.onclick=()=>currentConversation=chat.id;
-list.appendChild(div);
-});
+    data.conversations.forEach(chat => {
+        const div = document.createElement("div");
+        div.className = "conversation";
+
+        const title = document.createElement("span");
+        title.innerText = chat.title;
+
+        const del = document.createElement("span");
+        del.className = "delete";
+        del.innerText = "✖";
+        del.onclick = (e) => {
+            e.stopPropagation();
+            deleteChat(chat.id);
+        };
+
+        div.appendChild(title);
+        div.appendChild(del);
+
+        div.onclick = () => loadMessages(chat.id);
+
+        list.appendChild(div);
+    });
+}
+
+async function loadMessages(conversationId){
+    const res = await fetch(`/messages/${conversationId}`);
+    const data = await res.json();
+
+    const messagesDiv = document.getElementById("messages");
+    messagesDiv.innerHTML = "";
+
+    data.messages.forEach(msg => {
+        addMessage(msg.content, msg.role);
+    });
+
+    currentConversation = conversationId;
 }
 
 async function deleteChat(id){
-await fetch(`/delete_conversation/${id}`,{method:"DELETE"});
-loadConversations();
-document.getElementById("messages").innerHTML="";
+    await fetch(`/delete_conversation/${id}`, {method:"DELETE"});
+    if(currentConversation === id){
+        document.getElementById("messages").innerHTML = "";
+        currentConversation = null;
+    }
+    loadConversations();
 }
 
 async function sendMessage(){
-const message=document.getElementById("messageInput").value;
-if(!message)return;
+    const messageInput = document.getElementById("messageInput");
+    const message = messageInput.value.trim();
+    if(!message) return;
 
-if(!currentConversation){
-currentConversation=crypto.randomUUID();
+    if(!currentConversation){
+        currentConversation = crypto.randomUUID();
+    }
+
+    addMessage(message, "user");
+    messageInput.value = "";
+
+    const formData = new FormData();
+    formData.append("message", message);
+    formData.append("conversation_id", currentConversation);
+
+    const res = await fetch("/chat", {method:"POST", body:formData});
+    const data = await res.json();
+
+    addMessage(data.response, "assistant");
+
+    loadConversations();
 }
 
-const formData=new FormData();
-formData.append("message",message);
-formData.append("conversation_id",currentConversation);
-
-const res=await fetch("/chat",{method:"POST",body:formData});
-const data=await res.json();
-
-addMessage(message,"user");
-addMessage(data.response,"assistant");
-
-document.getElementById("messageInput").value="";
-loadConversations();
+function addMessage(text, role){
+    const div = document.createElement("div");
+    div.className = "message " + role;
+    div.innerText = text;
+    document.getElementById("messages").appendChild(div);
 }
 
-document.getElementById("messageInput").addEventListener("keydown",function(e){
-if(e.key==="Enter"){sendMessage();}
+document.getElementById("messageInput").addEventListener("keydown", function(e){
+    if(e.key === "Enter"){
+        sendMessage();
+    }
 });
-
-function addMessage(text,role){
-const div=document.createElement("div");
-div.className="message "+role;
-div.innerText=text;
-document.getElementById("messages").appendChild(div);
-}
 
 loadConversations();
 </script>
